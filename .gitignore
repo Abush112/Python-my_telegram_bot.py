@@ -1,162 +1,86 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import logging
+import openai
 
-# C extensions
-*.so
+# Loglarni sozlash
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Telegram va OpenAI API kalitlari
+TOKEN = '8166116671:AAHdAD5-8seR8LnYLAn7dBW9XYdfa1FiD88'
+OPENAI_API_KEY = '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'
+openai.api_key = OPENAI_API_KEY
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Menyu tugmalarini yaratish uchun yordamchi funksiya
+def create_main_menu():
+    keyboard = [
+        [KeyboardButton("eng_uz"), KeyboardButton("uz_eng")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# /start buyrug'iga javob beruvchi funksiya
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Foydalanuvchi botni ishga tushirdi.")
+    await update.message.reply_text(
+        "Salom! Men yangi botman. Sizga qanday yordam bera olaman?",
+        reply_markup=create_main_menu()
+    )
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+# OpenAI bilan tarjima qilish funksiyasi
+async def translate_with_openai(text, target_language):
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=f"Translate this text to {target_language}: {text}",
+        max_tokens=100
+    )
+    translation = response.choices[0].text.strip()
+    return translation
 
-# Translations
-*.mo
-*.pot
+# Tugma bosilganda javob beruvchi funksiya
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    logger.info(f"Foydalanuvchi tugmani bosdi: {text}")
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+    if text == "eng_uz":
+        await update.message.reply_text("Inglizcha matnni kiriting:")
+        context.user_data['mode'] = 'eng_uz'
+    elif text == "uz_eng":
+        await update.message.reply_text("O'zbekcha matnni kiriting:")
+        context.user_data['mode'] = 'uz_eng'
+    else:
+        # Tarjima qilish jarayoni
+        mode = context.user_data.get('mode')
+        if mode == 'eng_uz':
+            translation = await translate_with_openai(text, "Uzbek")
+        elif mode == 'uz_eng':
+            translation = await translate_with_openai(text, "English")
+        else:
+            translation = "Noma'lum buyruq."
 
-# Flask stuff:
-instance/
-.webassets-cache
+        await update.message.reply_text(translation)
 
-# Scrapy stuff:
-.scrapy
+# /help buyrug'iga javob beruvchi funksiya
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Menga savollaringizni yuboring yoki buyruqlardan foydalaning.")
 
-# Sphinx documentation
-docs/_build/
+# Asosiy ishga tushirish funksiyasi
+def main():
+    application = Application.builder().token(TOKEN).build()
 
-# PyBuilder
-.pybuilder/
-target/
+    # Buyruqlarni qo'shish
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
 
-# Jupyter Notebook
-.ipynb_checkpoints
+    # Tugmalarni boshqarish
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_button))
 
-# IPython
-profile_default/
-ipython_config.py
+    # Botni boshlash
+    application.run_polling()
+    logger.info("Bot ishga tushirildi.")
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
-.pdm.toml
-.pdm-python
-.pdm-build/
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+if __name__ == '__main__':
+    main()
